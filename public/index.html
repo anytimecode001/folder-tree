@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文件目录树</title>
+    <link rel="shortcut icon" href="/icons/favicon.ico" type="image/x-icon">
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+      :root {
+        --primary: #165dff;
+        --secondary: #4080ff;
+        --neutral-100: #f5f7fa;
+        --neutral-200: #e4e7ed;
+        --neutral-300: #dcdfe6;
+        --neutral-400: #c0c4cc;
+        --neutral-500: #909399;
+        --neutral-600: #606266;
+        --neutral-700: #303133;
+        --neutral-800: #1e1e1e;
+      }
+
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+        background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%);
+        color: var(--neutral-700);
+      }
+
+      .card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        transition: all 0.3s ease;
+      }
+
+      .card:hover {
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+      }
+
+      .search-box {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+      }
+
+      .search-box:focus-within {
+        box-shadow: 0 4px 12px rgba(22, 93, 255, 0.2);
+      }
+
+      .tree-container {
+        min-height: 70vh;
+        scrollbar-width: thin;
+        scrollbar-color: var(--neutral-300) transparent;
+      }
+
+      .tree-container::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      .tree-container::-webkit-scrollbar-thumb {
+        background-color: var(--neutral-300);
+        border-radius: 4px;
+      }
+
+      .tree-node {
+        transition: all 0.2s ease;
+      }
+
+      .tree-node:hover {
+        background-color: rgba(22, 93, 255, 0.05);
+      }
+
+      .tree-toggle-icon {
+        transition: transform 0.2s ease;
+      }
+
+      .tree-toggle-icon.open {
+        transform: rotate(90deg);
+      }
+
+      .highlight-text {
+        background-color: #ffeb3b;
+        color: #333;
+        padding: 0 2px;
+        border-radius: 3px;
+        font-weight: 500;
+      }
+
+      .file-icon {
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 8px;
+      }
+
+      .fade-in {
+        animation: fadeIn 0.3s ease-in-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .pulse {
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      .info-card {
+        background: linear-gradient(
+          135deg,
+          rgba(22, 93, 255, 0.05) 0%,
+          rgba(64, 128, 255, 0.05) 100%
+        );
+        border: 1px solid rgba(22, 93, 255, 0.1);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <main class="flex-grow container mx-auto px-4 py-8">
+      <div class="max-w-4xl mx-auto">
+        <div class="card overflow-hidden">
+          <div class="p-5 border-b border-gray-200">
+            <div class="relative">
+              <input
+                type="text"
+                id="search-input"
+                placeholder="搜索文件或文件夹..."
+                class="search-box w-full pl-10 pr-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all text-base"
+                autocomplete="off"
+              />
+              <i
+                class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+              ></i>
+              <button
+                id="clear-search-btn"
+                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none transition-colors"
+                title="清除搜索"
+              >
+                <i class="fas fa-times-circle"></i>
+              </button>
+            </div>
+
+            <div id="search-info" class="text-sm text-gray-500 mt-2 hidden">
+              <span id="match-count">0</span> 个匹配结果
+            </div>
+          </div>
+
+          <div class="p-4 tree-container" id="tree-container">
+            <div class="flex justify-end space-x-2 mb-4">
+              <button
+                id="expand-all"
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm flex items-center shadow-sm"
+              >
+                <i class="fas fa-plus-square mr-2"></i> 展开全部
+              </button>
+              <button
+                id="collapse-all"
+                class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm flex items-center shadow-sm"
+              >
+                <i class="fas fa-minus-square mr-2"></i> 折叠全部
+              </button>
+            </div>
+
+            <div class="flex justify-center my-8" id="loading-message">
+              <div class="text-center">
+                <div
+                  class="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-full bg-blue-100 pulse"
+                >
+                  <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
+                </div>
+                <p class="text-gray-600">正在加载文件结构...</p>
+              </div>
+            </div>
+
+            <div id="directory-structure" class="hidden"></div>
+
+            <div class="hidden flex-col items-center py-12" id="empty-message">
+              <div
+                class="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-4"
+              >
+                <i class="fas fa-folder-open text-yellow-500 text-2xl"></i>
+              </div>
+              <p class="text-gray-600">没有找到文件或文件夹</p>
+            </div>
+
+            <div
+              class="hidden flex-col items-center py-12"
+              id="no-search-results-message"
+            >
+              <div
+                class="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4"
+              >
+                <i class="fas fa-info-circle text-blue-500 text-2xl"></i>
+              </div>
+              <p class="text-gray-600 mb-2">没有找到匹配的文件或文件夹</p>
+              <p class="text-sm text-gray-500 max-w-xs">
+                尝试使用不同的关键词或检查拼写
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // DOM元素引用
+        const treeContainer = document.getElementById("tree-container");
+        const loadingMessage = document.getElementById("loading-message");
+        const emptyMessage = document.getElementById("empty-message");
+        const noSearchResultsMessage = document.getElementById(
+          "no-search-results-message"
+        );
+        const directoryStructure = document.getElementById(
+          "directory-structure"
+        );
+        const expandAllBtn = document.getElementById("expand-all");
+        const collapseAllBtn = document.getElementById("collapse-all");
+        const searchInput = document.getElementById("search-input");
+        const clearSearchBtn = document.getElementById("clear-search-btn");
+        const searchInfo = document.getElementById("search-info");
+        const matchCount = document.getElementById("match-count");
+
+        let searchTimeout;
+        let directoryData = [];
+
+        // 获取目录结构
+        async function getDirectoryStructure() {
+          try {
+            loadingMessage.classList.remove("hidden");
+            const response = await fetch("/api/content-structure");
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const structure = await response.json();
+            directoryData = structure; // 保存原始数据
+            return structure;
+          } catch (error) {
+            console.error("Error fetching directory structure:", error);
+            return [];
+          }
+        }
+
+        // 渲染目录结构
+        function renderDirectoryStructure(structure) {
+          directoryStructure.innerHTML = "";
+          noSearchResultsMessage.classList.add("hidden");
+          searchInfo.classList.add("hidden");
+
+          if (structure.length === 0) {
+            emptyMessage.classList.remove("hidden");
+            return;
+          }
+
+          emptyMessage.classList.add("hidden");
+          directoryStructure.classList.remove("hidden");
+
+          const rootNode = document.createElement("div");
+          rootNode.className = "mb-4 fade-in";
+
+          const rootRow = document.createElement("div");
+          rootRow.className =
+            "flex items-center py-2 px-4 rounded-lg bg-blue-100 mb-3 tree-node border border-blue-200";
+
+          const rootIcon = document.createElement("div");
+          rootIcon.className = "file-icon text-blue-600";
+          rootIcon.innerHTML = '<i class="fas fa-folder-open"></i>';
+          rootRow.appendChild(rootIcon);
+
+          const rootName = document.createElement("span");
+          rootName.className = "text-lg font-semibold text-blue-700";
+          rootName.textContent = "root";
+          rootRow.appendChild(rootName);
+
+          rootNode.appendChild(rootRow);
+
+          const treeContainer = document.createElement("div");
+          treeContainer.className = "pl-6";
+
+          structure.forEach((item, index, array) => {
+            const node = createTreeNode(item, 0, index === array.length - 1);
+            treeContainer.appendChild(node);
+          });
+
+          rootNode.appendChild(treeContainer);
+          directoryStructure.appendChild(rootNode);
+          directoryStructure.classList.add("fade-in");
+        }
+
+        // 创建树节点
+        function createTreeNode(item, level, isLastChild) {
+          const node = document.createElement("div");
+          node.className = `mb-1.5 tree-node fade-in ${
+            level > 0 ? "pl-6" : ""
+          }`;
+
+          const nodeRow = document.createElement("div");
+          nodeRow.dataset.name = item.name;
+          nodeRow.dataset.type = item.type;
+          nodeRow.dataset.path = item.path || "";
+          nodeRow.className = `flex items-center py-1.5 px-3 rounded-md hover:bg-gray-50 cursor-pointer transition-colors ${
+            level > 0 ? "ml-4" : ""
+          }`;
+
+          // 缩进处理
+          const spacer = document.createElement("div");
+          spacer.className = "w-4 mr-2";
+          nodeRow.appendChild(spacer);
+
+          // 切换图标
+          const toggleIconContainer = document.createElement("div");
+          toggleIconContainer.className =
+            "w-4 mr-2 flex items-center justify-center";
+
+          if (item.type === "directory" && (item.children || []).length > 0) {
+            const toggleIcon = document.createElement("i");
+            toggleIcon.className =
+              "fas fa-chevron-right tree-toggle-icon text-gray-500 cursor-pointer";
+            toggleIconContainer.appendChild(toggleIcon);
+          } else {
+            const placeholder = document.createElement("span");
+            placeholder.className = "w-4 h-4";
+            toggleIconContainer.appendChild(placeholder);
+          }
+          nodeRow.appendChild(toggleIconContainer);
+
+          // 节点图标
+          const nodeIcon = document.createElement("div");
+          nodeIcon.className = "file-icon mr-2";
+          if (item.type === "directory") {
+            nodeIcon.innerHTML =
+              '<i class="fas fa-folder text-yellow-500"></i>';
+          } else {
+            const ext = item.name.split(".").pop().toLowerCase();
+            if (["jpg", "png", "gif", "svg", "jpeg", "webp"].includes(ext)) {
+              nodeIcon.innerHTML =
+                '<i class="fas fa-file-image text-green-500"></i>';
+            } else if (["js", "ts", "jsx", "tsx"].includes(ext)) {
+              nodeIcon.innerHTML =
+                '<i class="fas fa-file-code text-blue-500"></i>';
+            } else if (["css", "scss", "less"].includes(ext)) {
+              nodeIcon.innerHTML =
+                '<i class="fab fa-css3-alt text-purple-500"></i>';
+            } else if (["html", "htm"].includes(ext)) {
+              nodeIcon.innerHTML =
+                '<i class="fab fa-html5 text-orange-500"></i>';
+            } else if (["md", "txt"].includes(ext)) {
+              nodeIcon.innerHTML =
+                '<i class="fas fa-file-alt text-blue-400"></i>';
+            } else {
+              nodeIcon.innerHTML = '<i class="fas fa-file text-gray-400"></i>';
+            }
+          }
+          nodeRow.appendChild(nodeIcon);
+
+          // 节点名称
+          const nodeName = document.createElement("span");
+          nodeName.className = "text-gray-700 truncate";
+          nodeName.textContent = item.name;
+          nodeRow.appendChild(nodeName);
+
+          // 文件大小
+          if (item.type === "file" && item.size) {
+            const sizeSpan = document.createElement("span");
+            sizeSpan.className = "text-xs text-gray-500 ml-2";
+            sizeSpan.textContent = formatFileSize(item.size);
+            nodeRow.appendChild(sizeSpan);
+          }
+
+          node.appendChild(nodeRow);
+
+          // 子节点容器
+          if (item.type === "directory" && (item.children || []).length > 0) {
+            const childrenContainer = document.createElement("div");
+            childrenContainer.className = "ml-8 mt-1 hidden";
+
+            item.children.forEach((child, index, array) => {
+              const childNode = createTreeNode(
+                child,
+                level + 1,
+                index === array.length - 1
+              );
+              childrenContainer.appendChild(childNode);
+            });
+
+            node.appendChild(childrenContainer);
+          }
+
+          return node;
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+          if (bytes === 0) return "0 Bytes";
+          const k = 1024;
+          const sizes = ["Bytes", "KB", "MB", "GB"];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return (
+            parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+          );
+        }
+
+        // 切换节点展开/折叠状态
+        function toggleNode(nodeRow, forceExpand = false) {
+          const nodeElement = nodeRow.closest(".tree-node");
+          if (!nodeElement) return;
+
+          const childrenContainer = nodeElement.querySelector(
+            ":scope > div.ml-8.mt-1"
+          );
+          const toggleIcon = nodeRow.querySelector(".tree-toggle-icon");
+
+          if (toggleIcon && childrenContainer) {
+            const isExpanded = !childrenContainer.classList.contains("hidden");
+
+            if (forceExpand || !isExpanded) {
+              // 展开节点
+              childrenContainer.classList.remove("hidden");
+              toggleIcon.classList.add("open", "fa-chevron-down");
+              toggleIcon.classList.remove("fa-chevron-right");
+
+              // 更新文件夹图标
+              const folderIcon = nodeRow.querySelector(".fa-folder");
+              if (folderIcon) {
+                folderIcon.classList.remove("fa-folder");
+                folderIcon.classList.add("fa-folder-open");
+              }
+            } else {
+              // 折叠节点
+              childrenContainer.classList.add("hidden");
+              toggleIcon.classList.remove("open", "fa-chevron-down");
+              toggleIcon.classList.add("fa-chevron-right");
+
+              // 更新文件夹图标
+              const folderIcon = nodeRow.querySelector(".fa-folder-open");
+              if (folderIcon) {
+                folderIcon.classList.remove("fa-folder-open");
+                folderIcon.classList.add("fa-folder");
+              }
+            }
+          }
+        }
+
+        // 展开所有节点
+        function expandAll() {
+          const nodeRows = document.querySelectorAll(
+            '.tree-node > div[data-type="directory"]'
+          );
+          nodeRows.forEach((row) => {
+            toggleNode(row, true);
+          });
+        }
+
+        // 折叠所有节点
+        function collapseAll() {
+          const nodeRows = document.querySelectorAll(
+            '.tree-node > div[data-type="directory"]'
+          );
+          nodeRows.forEach((row) => {
+            const nodeElement = row.closest(".tree-node");
+            const childrenContainer = nodeElement.querySelector(
+              ":scope > div.ml-8.mt-1"
+            );
+            const toggleIcon = row.querySelector(".tree-toggle-icon");
+
+            if (
+              childrenContainer &&
+              !childrenContainer.classList.contains("hidden")
+            ) {
+              childrenContainer.classList.add("hidden");
+              if (toggleIcon) {
+                toggleIcon.classList.remove("open", "fa-chevron-down");
+                toggleIcon.classList.add("fa-chevron-right");
+              }
+
+              // 更新文件夹图标
+              const folderIcon = row.querySelector(".fa-folder-open");
+              if (folderIcon) {
+                folderIcon.classList.remove("fa-folder-open");
+                folderIcon.classList.add("fa-folder");
+              }
+            }
+          });
+        }
+
+        // 高亮搜索匹配的文本
+        function highlightText(text, query) {
+          if (!query) return text;
+
+          const regex = new RegExp(`(${escapeRegExp(query)})`, "gi");
+          return text.replace(regex, '<span class="highlight-text">$1</span>');
+        }
+
+        // 转义正则特殊字符
+        function escapeRegExp(string) {
+          return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        }
+
+        // 搜索节点
+        function searchNodes(query) {
+          query = query.trim().toLowerCase();
+          const allNodeRows = document.querySelectorAll(".tree-node > div");
+          let matchCounter = 0;
+
+          if (!query) {
+            // 清空搜索
+            allNodeRows.forEach((row) => {
+              row.classList.remove("hidden", "bg-yellow-100");
+              const nameSpan = row.querySelector("span:not(.highlight-text)");
+              if (nameSpan) {
+                nameSpan.innerHTML = nameSpan.textContent;
+              }
+            });
+
+            noSearchResultsMessage.classList.add("hidden");
+            clearSearchBtn.classList.add("hidden");
+            searchInfo.classList.add("hidden");
+
+            // 折叠所有节点
+            collapseAll();
+
+            // 重新展开一级目录
+            setTimeout(() => {
+              const firstLevelNodes = document.querySelectorAll(
+                '.tree-node > div[data-type="directory"]'
+              );
+              firstLevelNodes.forEach((node) => {
+                if (
+                  node.closest("#directory-structure") === directoryStructure
+                ) {
+                  toggleNode(node, true);
+                }
+              });
+            }, 50);
+
+            return;
+          }
+
+          clearSearchBtn.classList.remove("hidden");
+          searchInfo.classList.remove("hidden");
+          matchCounter = 0;
+
+          // 重置所有节点
+          allNodeRows.forEach((row) => {
+            row.classList.remove("bg-yellow-100");
+            row.classList.add("hidden");
+            const nameSpan = row.querySelector("span:not(.highlight-text)");
+            if (nameSpan) {
+              nameSpan.innerHTML = nameSpan.textContent;
+            }
+          });
+
+          // 查找匹配节点并展开路径
+          allNodeRows.forEach((row) => {
+            const nodeName = row.dataset.name.toLowerCase();
+            if (nodeName.includes(query)) {
+              matchCounter++;
+              row.classList.remove("hidden");
+              row.classList.add("bg-yellow-100");
+
+              // 高亮匹配文本
+              const nameSpan = row.querySelector("span:not(.highlight-text)");
+              if (nameSpan) {
+                nameSpan.innerHTML = highlightText(row.dataset.name, query);
+              }
+
+              // 展开并显示所有父节点
+              let currentParentNodeElement = row.closest(".tree-node");
+              while (
+                currentParentNodeElement &&
+                currentParentNodeElement !== directoryStructure
+              ) {
+                const parentRow =
+                  currentParentNodeElement.querySelector(":scope > div");
+                if (parentRow) {
+                  parentRow.classList.remove("hidden");
+
+                  // 如果是目录，则展开
+                  if (parentRow.dataset.type === "directory") {
+                    toggleNode(parentRow, true);
+                  }
+                }
+                currentParentNodeElement =
+                  currentParentNodeElement.parentElement.closest(".tree-node");
+              }
+            }
+          });
+
+          matchCount.textContent = matchCounter;
+
+          if (matchCounter === 0) {
+            noSearchResultsMessage.classList.remove("hidden");
+          } else {
+            noSearchResultsMessage.classList.add("hidden");
+          }
+        }
+
+        // 初始化
+        async function init() {
+          loadingMessage.classList.remove("hidden");
+          directoryStructure.classList.add("hidden");
+          emptyMessage.classList.add("hidden");
+          noSearchResultsMessage.classList.add("hidden");
+
+          const structure = await getDirectoryStructure();
+          directoryData = structure;
+          renderDirectoryStructure(structure);
+
+          // 初始展开一级目录
+          setTimeout(() => {
+            const firstLevelNodes = document.querySelectorAll(
+              '.tree-node > div[data-type="directory"]'
+            );
+            firstLevelNodes.forEach((node) => {
+              if (node.closest("#directory-structure") === directoryStructure) {
+                toggleNode(node, true);
+              }
+            });
+          }, 100);
+
+          loadingMessage.classList.add("hidden");
+
+          // 添加事件监听
+          directoryStructure.addEventListener("click", (e) => {
+            const clickedRow = e.target.closest('div[data-type="directory"]');
+            if (clickedRow) {
+              toggleNode(clickedRow);
+            }
+          });
+
+          expandAllBtn.addEventListener("click", expandAll);
+          collapseAllBtn.addEventListener("click", collapseAll);
+
+          // 搜索输入处理
+          searchInput.addEventListener("input", (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+              searchNodes(e.target.value);
+            }, 300);
+          });
+
+          // 清除搜索
+          clearSearchBtn.addEventListener("click", () => {
+            searchInput.value = "";
+            searchInput.focus();
+            searchNodes("");
+          });
+
+          // 支持按ESC清除搜索
+          searchInput.addEventListener("keydown", (e) => {
+            if (e.key === "Escape") {
+              searchInput.value = "";
+              searchNodes("");
+            }
+          });
+        }
+
+        // 启动应用
+        init();
+      });
+    </script>
+  </body>
+</html>
